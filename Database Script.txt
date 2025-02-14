@@ -1,0 +1,295 @@
+Create Database NimapTest
+
+USE NimapTest
+
+---------
+
+CREATE TABLE Category(CategoryID INT IDENTITY PRIMARY KEY,CategoryName NVARCHAR(300),InActive BIT)
+
+INSERT INTO Category(CategoryName,InActive) VALUES ('Category 1',0),('Category 2',0),('Category 3',0)
+
+CREATE TABLE Product(ProductID INT IDENTITY,ProductName NVARCHAR(200), CategoryID INT
+,CONSTRAINT FK_Product_Category FOREIGN KEY (CategoryID) REFERENCES Category(CategoryID))
+
+-------
+
+CREATE PROC ProductDropDown
+AS
+BEGIN
+
+SELECT CategoryID [Value],CategoryName [Text] FROM Category WHERE ISNULL(InActive,0)=0
+
+END
+
+------
+
+CREATE PROC SaveProduct
+@ProductID INT,
+@ProductName NVARCHAR(300),
+@CategoryID INT
+AS
+BEGIN
+
+IF(ISNULL(@ProductID,0)=0)
+BEGIN
+
+INSERT INTO Product(ProductName,CategoryID)
+VALUES (@ProductName,@CategoryID)
+
+END
+
+ELSE
+BEGIN
+
+UPDATE Product SET ProductName=@ProductName, CategoryID=@CategoryID WHERE ProductID=@ProductID
+
+END
+
+
+END
+
+--------------------
+
+CREATE PROC ViewProduct
+@ProductID INT
+AS
+BEGIN
+
+SELECT ProductID, ProductName, CategoryID FROM Product WHERE ProductID = @ProductID
+
+END
+
+-------------
+
+CREATE PROC DeleteProduct
+@ProductID INT
+AS
+BEGIN
+
+Delete FROM Product WHERE ProductID = @ProductID
+
+END
+
+
+-------------------
+
+
+ALTER PROC SaveCategory
+@CategoryID INT,
+@CategoryName NVARCHAR(300),
+@InActive BIT
+
+AS
+BEGIN
+
+IF(ISNULL(@CategoryID,0)=0)
+BEGIN
+
+INSERT INTO Category(CategoryName,InActive)
+VALUES (@CategoryName,@InActive)
+
+END
+
+ELSE
+BEGIN
+
+UPDATE Category SET CategoryName=@CategoryName,InActive=@InActive WHERE CategoryID=@CategoryID
+
+END
+
+
+END
+
+--------------------
+
+ALE PROC ViewCategory
+@CategoryID INT
+AS
+BEGIN
+
+SELECT CategoryID, CategoryName, InActive FROM Category WHERE CategoryID = @CategoryID
+
+END
+
+-------------
+
+CREATE PROC DeleteCategory
+@CategoryID INT
+AS
+BEGIN
+
+Delete FROM Product WHERE CategoryID = @CategoryID
+
+Delete From Category WHERE CategoryID=@CategoryID
+
+END
+
+
+
+-------------------
+
+
+
+CREATE PROC ValCategory
+@CategoryName NVARCHAR(300)
+AS
+BEGIN
+
+SELECT Count(*) FROM Category Where CategoryName=@CategoryName
+
+END
+
+CREATE PROC ValProduct
+@ProductName NVARCHAR(300),
+@CategoryID INT
+AS
+BEGIN
+SELECT Count(*) FROM Product Where ProductName=@ProductName AND CategoryID=@CategoryID
+
+END
+
+
+  
+ALTER PROCEDURE CategoryList  
+    @Start INT,               
+    @Length INT,            
+    @Search NVARCHAR(MAX) = '',  
+    @SortColumn NVARCHAR(50) = '0',  
+    @SortDir NVARCHAR(4) = 'asc'
+	
+AS  
+BEGIN  
+    SET NOCOUNT ON;  
+  
+    DECLARE @TotalCount INT;  
+    DECLARE @OrderBy NVARCHAR(MAX);  
+
+    SELECT @TotalCount = COUNT(*)  
+    FROM Category  
+    WHERE   
+        (@Search = ''   
+         OR CategoryID LIKE '%' + @Search + '%'   
+         OR CategoryName LIKE '%' + @Search + '%'   
+         OR IIF(ISNULL(InActive, 0) = 0, 'NO', 'YES') LIKE '%' + @Search + '%');  
+  
+
+    SET @OrderBy =   
+        CASE   
+            WHEN @SortColumn = '0' AND @SortDir = 'asc' THEN 'CategoryID ASC'  
+            WHEN @SortColumn = '0' AND @SortDir = 'desc' THEN 'CategoryID DESC'  
+            WHEN @SortColumn = '1' AND @SortDir = 'asc' THEN 'CategoryName ASC'  
+            WHEN @SortColumn = '1' AND @SortDir = 'desc' THEN 'CategoryName DESC'  
+            WHEN @SortColumn = '2' AND @SortDir = 'asc' THEN 'IIF(ISNULL(InActive, 0) = 0, ''NO'', ''YES'') ASC'  
+            WHEN @SortColumn = '2' AND @SortDir = 'desc' THEN 'IIF(ISNULL(InActive, 0) = 0, ''NO'', ''YES'') DESC'  
+            ELSE 'CategoryID ASC'  
+        END;  
+  
+
+    DECLARE @SQL NVARCHAR(MAX);  
+  
+    SET @SQL = N'  
+    WITH CTE AS (  
+        SELECT   
+            CategoryID,  
+            CategoryName,  
+            IIF(ISNULL(InActive, 0) = 0, ''NO'', ''YES'') AS InActiveText,  
+            @TotalCount AS TotalCount,  
+            ROW_NUMBER() OVER (ORDER BY ' + @OrderBy + ') AS RowNum  
+        FROM Category  
+        WHERE   
+            (@Search = ''''   
+             OR CategoryID LIKE ''%'' + @Search + ''%''   
+             OR CategoryName LIKE ''%'' + @Search + ''%''   
+             OR IIF(ISNULL(InActive, 0) = 0, ''NO'', ''YES'') LIKE ''%'' + @Search + ''%''  
+            )  
+    )  
+    SELECT   
+        CategoryID,  
+        CategoryName,  
+        InActiveText,  
+        TotalCount  
+    FROM CTE  
+    WHERE RowNum > @Start AND RowNum <= (@Start + @Length);';  
+  
+    
+    EXEC sp_executesql @SQL,   
+        N'@Search NVARCHAR(MAX), @Start INT, @Length INT, @TotalCount INT',   
+        @Search, @Start, @Length, @TotalCount;  
+END;
+
+
+---------------------------
+
+ALTER PROCEDURE ProductList  
+    @Start INT,               
+    @Length INT,            
+    @Search NVARCHAR(MAX) = '',  
+    @SortColumn NVARCHAR(50) = '0',  
+    @SortDir NVARCHAR(4) = 'asc'
+AS  
+BEGIN  
+    SET NOCOUNT ON;  
+  
+    DECLARE @TotalCount INT;  
+    DECLARE @OrderBy NVARCHAR(MAX);  
+ 
+    SELECT @TotalCount = COUNT(*)  
+    FROM Product JOIN Category ON Product.CategoryID = Category.CategoryID  
+    WHERE   
+        (@Search = ''   
+		 OR ProductID LIKE '%'+@Search+'%'
+		 OR ProductName LIKE '%'+@Search+'%'
+         OR Product.CategoryID LIKE '%' + @Search + '%'   
+         OR CategoryName LIKE '%' + @Search + '%'   
+         );  
+
+    SET @OrderBy =   
+        CASE  
+		    WHEN @SortColumn = '0' AND @SortDir = 'asc' THEN 'ProductID ASC'  
+            WHEN @SortColumn = '0' AND @SortDir = 'desc' THEN 'ProductID DESC'  
+            WHEN @SortColumn = '1' AND @SortDir = 'asc' THEN 'ProductName ASC'  
+            WHEN @SortColumn = '1' AND @SortDir = 'desc' THEN 'ProductName DESC'
+            WHEN @SortColumn = '2' AND @SortDir = 'asc' THEN 'Product.CategoryID ASC'  
+            WHEN @SortColumn = '2' AND @SortDir = 'desc' THEN 'Product.CategoryID DESC'  
+            WHEN @SortColumn = '3' AND @SortDir = 'asc' THEN 'CategoryName ASC'  
+            WHEN @SortColumn = '3' AND @SortDir = 'desc' THEN 'CategoryName DESC'  
+            ELSE 'ProductID ASC' 
+        END;  
+    
+    DECLARE @SQL NVARCHAR(MAX);  
+  
+    SET @SQL = N'  
+    WITH CTE AS (  
+        SELECT
+		    ProductID,
+			ProductName,
+            Product.CategoryID,  
+            CategoryName,  
+            @TotalCount AS TotalCount,  
+            ROW_NUMBER() OVER (ORDER BY ' + @OrderBy + ') AS RowNum  
+        FROM Product JOIN Category ON Product.CategoryID = Category.CategoryID  
+        WHERE   
+            (@Search = ''''  
+			 OR ProductID LIKE ''%'' + @Search + ''%'' 
+			 OR ProductName LIKE ''%'' + @Search + ''%'' 
+             OR Product.CategoryID LIKE ''%'' + @Search + ''%''   
+             OR CategoryName LIKE ''%'' + @Search + ''%''   
+            )  
+    )  
+    SELECT
+	    ProductID,
+		ProductName,
+        CategoryID,  
+        CategoryName,    
+        TotalCount  
+    FROM CTE  
+    WHERE RowNum > @Start AND RowNum <= (@Start + @Length);';  
+  
+    
+    EXEC sp_executesql @SQL,   
+        N'@Search NVARCHAR(MAX), @Start INT, @Length INT, @TotalCount INT',   
+        @Search, @Start, @Length, @TotalCount;  
+END;
+
+
+

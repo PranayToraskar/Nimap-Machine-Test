@@ -1,0 +1,284 @@
+﻿@model Nimap_Product_CRUD.Contarcts.Product
+@{
+    ViewData["Title"] = "Product";
+}
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>@ViewData["Title"]</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.datatables.net/1.13.4/css/jquery.dataTables.min.css" rel="stylesheet">
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+    <style>
+        .tab-content {
+            margin-top: 20px;
+        }
+
+        .form-control {
+            margin-bottom: 15px;
+        }
+
+        .nav-pills .nav-link.active {
+            background-color: #007bff;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="my-4">@ViewData["Title"]</h1>
+
+        <ul class="nav nav-pills">
+            <li class="nav-item">
+                <a class="nav-link active" id="form-tab" data-bs-toggle="pill" href="#form">Add Product <i class="fas fa-plus-circle"></i> </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" id="list-tab" data-bs-toggle="pill" href="#list">Product List <i class="fas fa-list"></i></a>
+            </li>
+        </ul>
+
+        <div class="tab-content">
+            <div class="tab-pane fade show active" id="form">
+                <form id="product-form" method="post" class="mt-3">
+                    <div class="mb-3">
+                        @Html.HiddenFor(model=>model.ProductID)
+                        <label for="CategoryID" class="form-label">Category</label>
+                        @Html.DropDownListFor(
+                        model => model.CategoryID,
+                        new SelectList(Model.CategoryList, "Value", "Text", Model.CategoryID),"Select Category",
+                        new { @class = "form-control form-select" }
+                        )
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="ProductName" class="form-label">Product Name</label>
+                        @Html.TextBoxFor(model=>model.ProductName,new {@class="form-control",@placeholder="Product Name"})
+                    </div>
+
+                    <button type="button" id="SaveBtn" class="btn btn-primary">Save Product</button>
+                </form>
+            </div>
+
+            <div class="tab-pane fade" id="list">
+                <table id="TableList" class="display" width="100%">
+                    <thead>
+                        <tr>
+                            <th>Product ID</th>
+                            <th>Product Name</th>
+                            <th>Category ID</th>
+                            <th>Category Name</th>
+                            <th>Edit</th>
+                            <th>Delete</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        $(document).ready(function () {
+           
+            var TableList = $("#TableList").DataTable({
+                serverSide: true,
+                processing: true,
+                ajax: {
+                    url: '/Product/ProductList',
+                    type: 'GET',
+                    data: function (d) {
+                        d.sortColumn = d.order[0]?.column;
+                        d.sortDir = d.order[0]?.dir;
+                        d.search = d.search?.value || "";
+                    }
+                },
+                columns: [
+                    { 'data': 'productID' },
+                    { 'data': 'productName' },
+                    { 'data': 'categoryID' },
+                    { 'data': 'categoryName' },
+                    {
+                        'data': '',
+                        "render": function (data, type, full, meta) {
+                            return `<button class='btn btn-primary' onclick='EditProduct(${full.productID})' title='Edit Category'>
+                                    Edit
+                                </button>`;
+                        },
+                        orderable: false,
+                        searchable: false
+                    },
+                    {
+                        'data': '',
+                        "render": function (data, type, full, meta) {
+                            return `<button class='btn btn-danger' onclick='confirmDelete(${full.productID})' title='Delete Category'>
+                                    Delete
+                                </button>`;
+                        },
+                        orderable: false,
+                        searchable: false
+                    }
+
+
+                ]
+            });
+
+
+            $('#form-tab').click(function () {
+                $('#list-tab').removeClass('active');
+                $('#form-tab').addClass('active');
+                $('#form').addClass('show active');
+                $('#list').removeClass('show active');
+            });
+
+            $('#list-tab').click(function () {
+                $('#form-tab').removeClass('active');
+                $('#list-tab').addClass('active');
+                $('#list').addClass('show active');
+                $('#form').removeClass('show active');
+            });
+
+        });
+
+        $("#SaveBtn").click(function (e) {
+            e.preventDefault();
+            var productName = $('#ProductName');
+            var categoryId = $('#CategoryID');
+            var ProductId = parseInt($('#ProductID').val()) || 0;
+
+            if (categoryId.val() == "") {
+                notifyError("Select Category")
+                categoryId.focus();
+            }
+            else if (productName.val() == "") {
+                notifyError("Enter Product Name");
+                productName.focus();
+            }
+            else {
+
+                $.ajax({
+                    url: '/Product/SaveProduct',
+                    type: 'POST',
+                    data: $('form').serialize(),
+                    success: function (response) {
+                        if (parseInt(response) > 0) {
+                            if (ProductId == 0) {
+                                notifySuccess('Product saved successfully');
+                            }
+                            else {
+                                notifySuccess('Product updated successfully');
+                            }
+                            ClearForm();
+                            $("#TableList").DataTable().ajax.reload()
+                        }
+                        else {
+                            notifyError('Error saving product');
+                        }
+                    },
+                    error: function () {
+                        notifyError('Error saving product');
+                    }
+                });
+
+            }
+        })
+
+        function EditProduct(ProdcutId) {
+            $.ajax({
+                url: '/Product/ViewProduct',
+                type: 'GET',
+                data: { ProductId: ProdcutId },
+                success: function (data) {
+                    $("#ProductName").val(data.productName);
+                    $("#ProductID").val(data.productID);
+                    $("#CategoryID").val(data.categoryID);
+                    $('#form-tab').trigger("click");
+                },
+                error: function () {
+                    notifyError('Something Went Wrong');
+                }
+            });
+        }
+
+        function DeleteProduct(ProdcutId) {
+            $.ajax({
+                url: '/Product/DeleteProduct',
+                type: 'Post',
+                data: { ProductId: ProdcutId },
+                success: function (data) {
+
+                    notifySuccess("Product deleted successfully")
+                    $("#TableList").DataTable().ajax.reload()
+
+                },
+                error: function () {
+                    notifyError('Something Went Wrong');
+                }
+            });
+        }
+
+        function ClearForm() {
+            $("form").trigger("reset");
+        }
+
+        function notifyError(message) {
+            Swal.fire({
+                icon: 'error',
+                title: 'Oops...',
+                text: message
+            });
+        }
+
+        function notifySuccess(message) {
+            Swal.fire({
+                icon: 'success',
+                title: 'Yup...',
+                text: message
+            });
+        }
+
+
+        $("#ProductName").change(function () {
+            var cnt = $(this);
+            var CategoryID = parseInt($("#CategoryID").val()) || 0;
+            var ProductID = parseInt($("#ProductID").val()) || 0;
+            if (CategoryID == 0) {
+                notifyError("Select Category");
+                cnt.val("");
+                $("#CategoryID").focus();
+            }
+            else if (ProductID == 0) {
+                $.ajax({
+                    url: '/Product/ValProduct',
+                    type: 'Post',
+                    data: { ProductName: cnt.val(), CategoryID: CategoryID },
+                    success: function (data) {
+                        if (parseInt(data) > 0) {
+                            notifyError("Product Already Exist")
+                            cnt.val("");
+                            cnt.focus();
+                        }
+                    },
+                    error: function () {
+                        notifyError('Something Went Wrong');
+                    }
+                });
+            }
+        })
+
+        function confirmDelete(productId) {
+
+            if (confirm('Are you sure you want to delete this product?')) {
+                DeleteProduct(productId);
+            }
+        }
+    </script>
+</body>
+</html>
